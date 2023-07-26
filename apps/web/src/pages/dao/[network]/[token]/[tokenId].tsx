@@ -17,8 +17,6 @@ import SWR_KEYS from 'src/constants/swrKeys'
 import { TokenWithWinner } from 'src/data/contract/requests/getToken'
 import { useVotes } from 'src/hooks'
 import { getDaoLayout } from 'src/layouts/DaoLayout'
-import { Auction } from 'src/modules/auction'
-import { AuctionSkeleton } from 'src/modules/auction/components/AuctionSkeleton'
 import {
   About,
   Activity,
