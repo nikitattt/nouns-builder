@@ -56,6 +56,10 @@ export const Activity: React.FC = () => {
       <Flex direction={'column'} className={sectionWrapperStyle['proposals']} mx={'auto'}>
         <Treasury />
 
+        <Text variant="heading-sm" style={{ fontWeight: 800 }}>
+          Proposals
+        </Text>
+
         <Flex direction={'column'} mt={'x6'}>
           {data?.proposals?.length ? (
             data?.proposals?.map((proposal, index: number) => (
