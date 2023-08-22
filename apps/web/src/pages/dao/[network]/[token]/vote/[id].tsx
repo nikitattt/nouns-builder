@@ -13,9 +13,8 @@ import { PUBLIC_DEFAULT_CHAINS } from 'src/constants/defaultChains'
 import SWR_KEYS from 'src/constants/swrKeys'
 import { getProposal } from 'src/data/subgraph/requests/proposalQuery'
 import { getDaoLayout } from 'src/layouts/DaoLayout'
-import { SectionHandler, useDaoStore } from 'src/modules/dao'
+import { SectionHandler } from 'src/modules/dao'
 import {
-  ProposalActions,
   ProposalDescription,
   ProposalDetailsGrid,
   ProposalHeader,
@@ -41,7 +40,6 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
   ogImageURL,
 }) => {
   const { query } = useRouter()
-  const { governor } = useDaoStore((x) => x.addresses)
   const chain = useChainStore((x) => x.chain)
 
   const { data: proposal } = useSWR([SWR_KEYS.PROPOSAL, chain.id, proposalId], (_, id) =>
@@ -68,8 +66,6 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
     return null
   }
 
-  const displayActions = isProposalOpen(proposal.state)
-
   return (
     <Fragment>
       <Meta
@@ -82,8 +78,6 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
       <Flex position="relative" direction="column">
         <Flex className={propPageWrapper} gap={{ '@initial': 'x2', '@768': 'x4' }}>
           <ProposalHeader proposal={proposal} />
-
-          {displayActions && <ProposalActions daoName={daoName} proposal={proposal} />}
 
           <ProposalDetailsGrid proposal={proposal} />
         </Flex>
