@@ -24,9 +24,7 @@ import { unpackOptionalArray } from 'src/utils/helpers'
 import { formatCryptoVal } from 'src/utils/numbers'
 
 import { useDaoStore } from '../../stores'
-import { parseContractURI } from '../../utils'
 import { MembersList } from '../MembersList'
-import { ExternalLinks } from './ExternalLinks'
 import { Founder } from './Founder'
 import { Statistic } from './Statistic'
 
@@ -59,9 +57,8 @@ export const About: React.FC = () => {
     ] as const,
   })
 
-  const [name, totalSupply, founders, daoImage, description, contractURI] =
+  const [name, totalSupply, founders, daoImage, description] =
     unpackOptionalArray(contractData, 6)
-  const parsedContractURI = parseContractURI(contractURI)
 
   const { data: balance } = useBalance({
     address: treasury as Address,
@@ -118,10 +115,6 @@ export const About: React.FC = () => {
           )}
           <Text className={daoName}>{name}</Text>
         </Flex>
-
-        <Box display={{ '@initial': 'none', '@768': 'block' }}>
-          <ExternalLinks links={{ website: parsedContractURI?.external_url }} />
-        </Box>
       </Flex>
 
       <Flex
@@ -159,12 +152,6 @@ export const About: React.FC = () => {
         </Box>
       ) : null}
 
-      <Box
-        mt={{ '@initial': 'x4', '@768': 'x6' }}
-        display={{ '@initial': 'block', '@768': 'none' }}
-      >
-        <ExternalLinks links={{ website: parsedContractURI?.external_url }} />
-      </Box>
       <Text variant="heading-xs" mt="x16" style={{ fontWeight: 800 }}>
         Founders
       </Text>
