@@ -12,6 +12,11 @@
     "noUnusedParameters": false,
     "types": [
       "vitest/globals"
+    ],
+    "plugins": [
+      {
+        "name": "next"
+      }
     ]
   },
   "include": [
@@ -19,6 +24,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "node_modules/eslint-plugin-react/lib/types.d.ts"
+    "node_modules/eslint-plugin-react/lib/types.d.ts",
+    ".next/types/**/*.ts"
   ]
 }

@@ -3,6 +3,8 @@ import { useRouter } from 'next/router'
 import React from 'react'
 import useSWR from 'swr'
 
+import { ContractButton } from 'src/components/ContractButton'
+import { Countdown } from 'src/components/Countdown'
 import AnimatedModal from 'src/components/Modal/AnimatedModal'
 import { SuccessModalContent } from 'src/components/Modal/SuccessModalContent'
 import Pagination from 'src/components/Pagination'
@@ -11,6 +13,8 @@ import {
   ProposalsResponse,
   getProposals,
 } from 'src/data/subgraph/requests/proposalsQuery'
+import { useVotes } from 'src/hooks'
+import { useDelayedGovernance } from 'src/hooks/useDelayedGovernance'
 import { usePagination } from 'src/hooks/usePagination'
 import { ProposalCard } from 'src/modules/proposal'
 import { useChainStore } from 'src/stores/useChainStore'
@@ -38,6 +42,19 @@ export const Activity: React.FC = () => {
 
   const { handlePageBack, handlePageForward } = usePagination(data?.pageInfo?.hasNextPage)
 
+  const { isOwner, isDelegating, hasThreshold, proposalVotesRequired } = useVotes({
+    chainId: chain.id,
+    governorAddress: addresses?.governor,
+    signerAddress: address,
+    collectionAddress: query?.token as AddressType,
+  })
+
+  const { isGovernanceDelayed, delayedUntilTimestamp } = useDelayedGovernance({
+    tokenAddress: addresses?.token,
+    governorAddress: addresses?.governor,
+    chainId: chain.id,
+  })
+
   const [
     { viewCurrentDelegate, viewDelegateForm, viewSuccessfulDelegate, newDelegate },
     { view, edit, update, close },
@@ -60,8 +77,122 @@ export const Activity: React.FC = () => {
           Proposals
         </Text>
 
+          <Flex justify={'center'} align={'center'}>
+            {address && !isDelegating && !isOwner && !isMobile && (
+              <Flex mr={'x4'} color={'tertiary'}>
+                You have no votes.
+              </Flex>
+            )}
+            {isDelegating && !isMobile && (
+              <Flex mr={'x4'} color={'tertiary'}>
+                Your votes are delegated.
+              </Flex>
+            )}
+            {isOwner && !hasThreshold && !isMobile && (
+              <Flex mr={'x4'} color={'tertiary'}>
+                {Number(proposalVotesRequired)} votes required to propose.
+              </Flex>
+            )}
+            {isOwner || isDelegating ? (
+              <>
+                {!isMobile ? (
+                  <ContractButton
+                    className={delegateBtn}
+                    color="ghost"
+                    borderColor="border"
+                    borderStyle="solid"
+                    borderWidth="normal"
+                    handleClick={view}
+                    mr="x2"
+                  >
+                    Delegate
+                  </ContractButton>
+                ) : (
+                  <MobileMenu>
+                    <ContractButton
+                      className={selectDelegateBtn}
+                      style={{ backgroundColor: '#FFF', color: '#000' }}
+                      handleClick={view}
+                    >
+                      Delegate
+                    </ContractButton>
+                  </MobileMenu>
+                )}
+              </>
+            ) : null}
+            {!address ? (
+              <Button
+                className={submitProposalBtn}
+                onClick={openConnectModal}
+                color={'tertiary'}
+              >
+                Submit {!isMobile ? 'proposal' : null}
+              </Button>
+            ) : (
+              <Button
+                className={submitProposalBtn}
+                onClick={address ? handleProposalCreation : openConnectModal}
+                disabled={isGovernanceDelayed ? true : address ? !hasThreshold : false}
+                color={'tertiary'}
+              >
+                Submit {!isMobile ? 'proposal' : null}
+              </Button>
+            )}
+          </Flex>
+        </Flex>
+        {addresses && (
+          <Upgrade
+            collection={query.token as string}
+            hasThreshold={hasThreshold}
+            addresses={addresses}
+          />
+        )}
         <Flex direction={'column'} mt={'x6'}>
-          {data?.proposals?.length ? (
+          {isGovernanceDelayed ? (
+            <Flex
+              width={'100%'}
+              mt={'x4'}
+              p={'x4'}
+              justify={'center'}
+              align={'center'}
+              borderColor={'border'}
+              borderStyle={'solid'}
+              borderRadius={'curved'}
+              borderWidth={'normal'}
+            >
+              <Flex textAlign={'center'} align={'center'}>
+                <Text
+                  color={'text3'}
+                  variant={'paragraph-md'}
+                  ml={{ '@initial': 'x0', '@768': 'x3' }}
+                >
+                  Time remaining before proposals can be submitted:
+                </Text>
+              </Flex>
+              <Flex
+                w={{ '@initial': '100%', '@768': 'auto' }}
+                justify={'center'}
+                align={'center'}
+                px={'x2'}
+                py={'x4'}
+              >
+                <Text
+                  fontWeight={'display'}
+                  ml="x1"
+                  style={{
+                    fontVariantNumeric: 'tabular-nums',
+                    fontFeatureSettings: 'tnum',
+                  }}
+                >
+                  <Countdown
+                    end={Number(delayedUntilTimestamp)}
+                    onEnd={() => {}}
+                    style={{ fontWeight: 'bold' }}
+                  />
+                </Text>
+              </Flex>
+            </Flex>
+          ) : data?.proposals?.length ? (
             data?.proposals?.map((proposal, index: number) => (
               <ProposalCard
                 key={index}

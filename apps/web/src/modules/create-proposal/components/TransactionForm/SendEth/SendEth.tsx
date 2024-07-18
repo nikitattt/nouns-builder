@@ -1,7 +1,7 @@
 import { Box, Button, Flex } from '@zoralabs/zord'
-import { ethers } from 'ethers'
 import { Form, Formik } from 'formik'
 import type { FormikHelpers } from 'formik'
+import { getAddress } from 'viem'
 import { useBalance } from 'wagmi'
 
 import { Icon } from 'src/components/Icon'
@@ -35,10 +35,10 @@ export const SendEth = () => {
   ) => {
     if (!values.amount || !values.recipientAddress) return
 
-    const target = await getEnsAddress(
-      values.recipientAddress,
-      getProvider(CHAIN_ID.ETHEREUM)
-    )
+    const chainToQuery =
+      chain.id === CHAIN_ID.FOUNDRY ? CHAIN_ID.FOUNDRY : CHAIN_ID.ETHEREUM
+
+    const target = await getEnsAddress(values.recipientAddress, getProvider(chainToQuery))
     const value = values.amount.toString()
 
     addTransaction({
@@ -47,7 +47,7 @@ export const SendEth = () => {
       transactions: [
         {
           functionSignature: 'sendEth(address)',
-          target: ethers.utils.getAddress(target),
+          target: getAddress(target),
           value,
           calldata: '0x',
         },

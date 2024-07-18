@@ -1,40 +1,54 @@
 import { Button, Flex } from '@zoralabs/zord'
 import React, { useState } from 'react'
 import {
+  useAccount,
   useContractRead,
   useContractWrite,
   usePrepareContractWrite,
-  useSigner,
 } from 'wagmi'
+import { waitForTransaction } from 'wagmi/actions'
 
 import { ContractButton } from 'src/components/ContractButton'
 import { auctionAbi } from 'src/data/contract/abis'
 import { useDaoStore } from 'src/modules/dao'
 import { useChainStore } from 'src/stores/useChainStore'
+import { AddressType } from 'src/typings'
 
 import { auctionActionButtonVariants } from '../Auction.css'
 
 interface SettleProps {
   isEnding: boolean
   collectionAddress?: string
+  owner?: string | undefined
+  externalAuctionAddress?: AddressType
+  compact?: boolean
 }
 
-export const Settle = ({ isEnding }: SettleProps) => {
-  const { data: signer } = useSigner()
+export const Settle = ({
+  isEnding,
+  owner,
+  externalAuctionAddress,
+  compact = false,
+}: SettleProps) => {
   const chain = useChainStore((x) => x.chain)
-  const addresses = useDaoStore((state) => state.addresses)
+  const addresses = useDaoStore?.((state) => state.addresses) || {}
+
+  const { address } = useAccount()
+  const isWinner = owner != undefined && address == owner
+
+  const auctionAddress = externalAuctionAddress || addresses?.auction
 
   const { data: paused } = useContractRead({
-    enabled: !!addresses?.auction,
-    address: addresses?.auction,
+    enabled: !!auctionAddress,
+    address: auctionAddress,
     chainId: chain.id,
     abi: auctionAbi,
     functionName: 'paused',
   })
 
   const { config, error } = usePrepareContractWrite({
-    enabled: !!addresses?.auction,
-    address: addresses?.auction,
+    enabled: !!auctionAddress,
+    address: auctionAddress,
     abi: auctionAbi,
     functionName: paused ? 'settleAuction' : 'settleCurrentAndCreateNewAuction',
   })
@@ -44,14 +58,12 @@ export const Settle = ({ isEnding }: SettleProps) => {
   const [settling, setSettling] = useState(false)
 
   const handleSettle = async () => {
-    if (!signer) return
-
     if (!!error) return
 
     setSettling(true)
     try {
-      const txn = await writeAsync?.()
-      await txn?.wait()
+      const tx = await writeAsync?.()
+      if (tx?.hash) await waitForTransaction({ hash: tx.hash })
       setSettling(false)
     } catch (error) {
       setSettling(false)
@@ -71,7 +83,15 @@ export const Settle = ({ isEnding }: SettleProps) => {
   if (settling) {
     return (
       <Flex direction="column" align="center" width={'100%'}>
-        <Button disabled className={auctionActionButtonVariants['settling']}>
+        <Button
+          disabled
+          className={
+            compact
+              ? auctionActionButtonVariants['dashSettle']
+              : auctionActionButtonVariants['settling']
+          }
+          variant={compact ? 'outline' : 'primary'}
+        >
           Settling
         </Button>
       </Flex>
@@ -82,9 +102,14 @@ export const Settle = ({ isEnding }: SettleProps) => {
     <Flex direction="column" align="center" width={'100%'}>
       <ContractButton
         handleClick={handleSettle}
-        className={auctionActionButtonVariants['settle']}
+        className={
+          compact
+            ? auctionActionButtonVariants['dashSettle']
+            : auctionActionButtonVariants['settle']
+        }
+        variant={compact ? 'outline' : 'primary'}
       >
-        Settle Auction
+        {isWinner ? 'Claim NFT' : 'Start next auction'}
       </ContractButton>
     </Flex>
   )

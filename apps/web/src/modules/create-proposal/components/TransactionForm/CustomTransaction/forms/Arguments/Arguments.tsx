@@ -1,7 +1,7 @@
 import { Flex } from '@zoralabs/zord'
-import { utils } from 'ethers'
 import isEqual from 'lodash/isEqual'
 import React from 'react'
+import { encodeAbiParameters, isAddress, isHex } from 'viem'
 import * as Yup from 'yup'
 
 import { TEXT, TEXTAREA } from 'src/components/Fields/types'
@@ -98,7 +98,7 @@ export const Arguments = () => {
           [cv.name]: Yup.string().test(
             'is valid hex string',
             'invalid hex string',
-            (value: string | undefined) => !!(!value || utils.isHexString(value))
+            (value: string | undefined) => !!(!value || isHex(value))
           ),
         }
       }
@@ -113,10 +113,17 @@ export const Arguments = () => {
           return {
             [cv.name]: Yup.string()
               .required('*')
-              .test('is valid abi type', 'valid abi type', (value) => {
+              .test('is valid abi type', 'invalid abi type', (value) => {
                 const list = value?.replace(/\s/g, '').split(',')
                 try {
-                  utils.defaultAbiCoder.encode([type], [list])
+                  encodeAbiParameters(
+                    [
+                      {
+                        type,
+                      },
+                    ],
+                    [list]
+                  )
                   return true
                 } catch (e) {
                   return false
@@ -132,7 +139,7 @@ export const Arguments = () => {
                 .test(
                   'isValidAddress',
                   'invalid address',
-                  (value: string | undefined) => !!value && utils.isAddress(value)
+                  (value: string | undefined) => !!value && isAddress(value)
                 ),
             }
           case 'unknown':
@@ -146,7 +153,14 @@ export const Arguments = () => {
                     return false
                   }
                   try {
-                    utils.defaultAbiCoder.encode([type], [value])
+                    encodeAbiParameters(
+                      [
+                        {
+                          type,
+                        },
+                      ],
+                      [value]
+                    )
                     return true
                   } catch (e) {
                     return false

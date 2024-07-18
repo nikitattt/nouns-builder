@@ -1,14 +1,10 @@
-import { keyframes, style, styleVariants } from '@vanilla-extract/css'
+import { style, styleVariants } from '@vanilla-extract/css'
 import { atoms, media, theme, vars } from '@zoralabs/zord'
 
-const pulse = keyframes({
-  '0%': { opacity: '1' },
-  '100%': { opacity: '1' },
-  '50%': { opacity: '.5' },
-})
+import { skeletonAnimation } from 'src/styles/animations.css'
 
 export const auctionSkeleton = style({
-  animation: `${pulse} 2s cubic-bezier(0.4, 0, 0.6, 1) infinite`,
+  animation: skeletonAnimation,
 })
 
 export const auctionWrap = atoms({
@@ -172,6 +168,7 @@ export const auctionActionButtonVariants = styleVariants({
     auctionActionButton,
     { width: '100%', background: '#F1F1F1', color: '#808080' },
   ],
+  dashSettle: { borderRadius: '12px', width: '100%' },
 })
 
 export const bidForm = style({
@@ -279,5 +276,16 @@ export const tokenImage = style({
     top: 0,
     width: '100%',
     borderRadius: 12,
+    pointerEvents: 'none',
   },
 })
+export const switcherBox = style({ width: '100%', maxWidth: '912px' })
+export const overflowEllipsis = style([
+  {
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  atoms({
+    overflow: 'hidden',
+  }),
+])

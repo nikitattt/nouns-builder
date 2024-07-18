@@ -1,6 +1,6 @@
 import axios from 'axios'
-import { getAddress } from 'ethers/lib/utils.js'
 import { NextApiRequest, NextApiResponse } from 'next'
+import { getAddress } from 'viem'
 
 import { PUBLIC_DEFAULT_CHAINS } from 'src/constants/defaultChains'
 import { MyDaosResponse } from 'src/data/subgraph/requests/daoQuery'
@@ -31,9 +31,7 @@ export const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 
   try {
     const [daos, tokens] = await Promise.all([
-      axios
-        .get<MyDaosResponse>(`${baseUrl}/api/profile/${network}/${address}/daos`)
-        .then((x) => x.data),
+      axios.get<MyDaosResponse>(`${baseUrl}/api/daos/${address}`).then((x) => x.data),
       tokensQuery(chain.id, address, page ? parseInt(page as string) : undefined),
     ])
 

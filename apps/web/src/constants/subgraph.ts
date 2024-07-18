@@ -2,19 +2,21 @@ import { CHAIN_ID } from 'src/typings'
 
 export const PUBLIC_SUBGRAPH_URL = {
   [CHAIN_ID.ETHEREUM]:
-    'https://api.thegraph.com/subgraphs/name/neokry/nouns-builder-mainnet',
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-ethereum-mainnet/stable/gn',
   [CHAIN_ID.OPTIMISM]:
-    'https://api.thegraph.com/subgraphs/name/neokry/noun-builder-optimism-mainnet',
-  [CHAIN_ID.GOERLI]:
-    'https://api.thegraph.com/subgraphs/name/neokry/nouns-builder-goerli',
-  [CHAIN_ID.OPTIMISM_GOERLI]:
-    'https://api.thegraph.com/subgraphs/name/neokry/nouns-builder-optimism-goerli',
-  [CHAIN_ID.BASE_GOERLI]:
-    'https://api.studio.thegraph.com/query/49279/nouns-builder-base-goerli/version/latest',
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-optimism-mainnet/stable/gn',
+  [CHAIN_ID.SEPOLIA]:
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-sepolia-testnet/stable/gn',
+  [CHAIN_ID.OPTIMISM_SEPOLIA]:
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-optimism-sepolia/stable/gn',
+  [CHAIN_ID.BASE]:
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-base-mainnet/stable/gn',
+  [CHAIN_ID.BASE_SEPOLIA]:
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-base-sepolia/stable/gn',
   [CHAIN_ID.ZORA]:
-    'https://api.goldsky.com/api/public/project_clhk16b61ay9t49vm6ntn4mkz/subgraphs/nouns-builder-zora/stable/gn',
-  [CHAIN_ID.ZORA_GOERLI]:
-    'https://api.goldsky.com/api/public/project_clhk16b61ay9t49vm6ntn4mkz/subgraphs/nouns-builder-zora-goerli/stable/gn',
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-zora-mainnet/stable/gn',
+  [CHAIN_ID.ZORA_SEPOLIA]:
+    'https://api.goldsky.com/api/public/project_clkk1ucdyf6ak38svcatie9tf/subgraphs/nouns-builder-zora-sepolia/stable/gn',
   [CHAIN_ID.FOUNDRY]:
     'https://api.thegraph.com/subgraphs/name/neokry/nouns-builder-mainnet',
 }

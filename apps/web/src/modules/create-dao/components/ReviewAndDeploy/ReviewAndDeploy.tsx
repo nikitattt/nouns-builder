@@ -1,13 +1,20 @@
+import { Box, Flex, atoms } from '@zoralabs/zord'
+import { getFetchableUrl } from 'ipfs-service'
+import React, { useState } from 'react'
+import {
+  decodeEventLog,
+  encodeAbiParameters,
+  getAddress,
+  parseAbiParameters,
+  parseEther,
+} from 'viem'
+import { useAccount, useContractRead } from 'wagmi'
 import {
   WriteContractUnpreparedArgs,
   prepareWriteContract,
+  waitForTransaction,
   writeContract,
-} from '@wagmi/core'
-import { Box, Flex, atoms } from '@zoralabs/zord'
-import { BigNumber, ethers } from 'ethers'
-import { getFetchableUrl } from 'ipfs-service'
-import React, { useState } from 'react'
-import { useSigner } from 'wagmi'
+} from 'wagmi/actions'
 
 import { ContractButton } from 'src/components/ContractButton'
 import { defaultBackButton } from 'src/components/Fields/styles.css'
@@ -15,6 +22,8 @@ import { Icon } from 'src/components/Icon'
 import { PUBLIC_MANAGER_ADDRESS } from 'src/constants/addresses'
 import { NULL_ADDRESS } from 'src/constants/addresses'
 import { managerAbi } from 'src/data/contract/abis'
+import { managerV2Abi } from 'src/data/contract/abis/ManagerV2'
+import { L2_CHAINS } from 'src/data/contract/chains'
 import { formatAuctionDuration, formatFounderAllocation } from 'src/modules/create-dao'
 import { useChainStore } from 'src/stores/useChainStore'
 import {
@@ -54,12 +63,20 @@ const DEPLOYMENT_ERROR = {
 }
 
 export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
-  const { data: signer } = useSigner()
   const [isPendingTransaction, setIsPendingTransaction] = useState<boolean>(false)
   const [hasConfirmedTerms, setHasConfirmedTerms] = useState<boolean>(false)
   const [hasConfirmedChain, setHasConfirmedChain] = useState<boolean>(false)
+  const [hasConfirmedRewards, setHasConfirmedRewards] = useState<boolean>(false)
   const [deploymentError, setDeploymentError] = useState<string | undefined>()
   const chain = useChainStore((x) => x.chain)
+  const isL2 = L2_CHAINS.includes(chain.id)
+  const { data: version, isLoading: isVersionLoading } = useContractRead({
+    abi: managerAbi,
+    address: PUBLIC_MANAGER_ADDRESS[chain.id],
+    functionName: 'contractVersion',
+    chainId: chain.id,
+  })
+  const { address } = useAccount()
 
   const {
     founderAllocation,
@@ -87,52 +104,51 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
     ...contributionAllocation,
   ].map(({ founderAddress, allocationPercentage: allocation, endDate }) => ({
     wallet: founderAddress as AddressType,
-    ownershipPct: allocation ? BigNumber.from(allocation) : BigNumber.from(0),
-    vestExpiry: BigNumber.from(Math.floor(new Date(endDate).getTime() / 1000)),
+    ownershipPct: allocation ? BigInt(allocation) : BigInt(0),
+    vestExpiry: BigInt(Math.floor(new Date(endDate).getTime() / 1000)),
   }))
 
-  const abiCoder = new ethers.utils.AbiCoder()
-  const tokenParamsHex = abiCoder.encode(
-    ['string', 'string', 'string', 'string', 'string', 'string'],
+  const tokenParamsHex = encodeAbiParameters(
+    parseAbiParameters(
+      'string name, string symbol, string description, string daoImage, string daoWebsite, string baseRenderer'
+    ),
     [
       sanitizeStringForJSON(general?.daoName),
       general?.daoSymbol.replace('$', ''),
       sanitizeStringForJSON(setUpArtwork?.projectDescription),
-      general?.daoAvatar,
+      general?.daoAvatar || '',
       sanitizeStringForJSON(general?.daoWebsite || ''),
       'https://api.zora.co/renderer/stack-images',
     ]
   )
 
-  const tokenParams = { initStrings: ethers.utils.hexlify(tokenParamsHex) as AddressType }
+  const tokenParams = { initStrings: tokenParamsHex as AddressType }
 
   const auctionParams = {
     reservePrice: auctionSettings.auctionReservePrice
-      ? ethers.utils.parseEther(auctionSettings.auctionReservePrice.toString())
-      : ethers.utils.parseEther('0'),
+      ? parseEther(auctionSettings.auctionReservePrice.toString())
+      : parseEther('0'),
     duration: auctionSettings?.auctionDuration
-      ? BigNumber.from(toSeconds(auctionSettings?.auctionDuration))
-      : BigNumber.from('86400'),
+      ? BigInt(toSeconds(auctionSettings?.auctionDuration))
+      : BigInt('86400'),
+    founderRewardRecipent: NULL_ADDRESS,
+    founderRewardBps: 0,
   }
 
   const govParams = {
-    timelockDelay: BigNumber.from(toSeconds({ days: 2 }).toString()),
-    votingDelay: BigNumber.from(toSeconds(auctionSettings.votingDelay)),
-    votingPeriod: BigNumber.from(toSeconds(auctionSettings.votingPeriod)),
+    timelockDelay: BigInt(toSeconds({ days: 2 }).toString()),
+    votingDelay: BigInt(toSeconds(auctionSettings.votingDelay)),
+    votingPeriod: BigInt(toSeconds(auctionSettings.votingPeriod)),
     proposalThresholdBps: auctionSettings?.proposalThreshold
-      ? BigNumber.from(
-          Number((Number(auctionSettings?.proposalThreshold) * 100).toFixed(2))
-        )
-      : BigNumber.from('0'),
+      ? BigInt(Number((Number(auctionSettings?.proposalThreshold) * 100).toFixed(2)))
+      : BigInt('0'),
     quorumThresholdBps: auctionSettings?.quorumThreshold
-      ? BigNumber.from(
-          Number((Number(auctionSettings?.quorumThreshold) * 100).toFixed(2))
-        )
-      : BigNumber.from('0'),
+      ? BigInt(Number((Number(auctionSettings?.quorumThreshold) * 100).toFixed(2)))
+      : BigInt('0'),
     vetoer:
       vetoPower === true
-        ? ethers.utils.getAddress(vetoerAddress as AddressType)
-        : ethers.utils.getAddress(NULL_ADDRESS),
+        ? getAddress(vetoerAddress as AddressType)
+        : getAddress(NULL_ADDRESS),
   }
 
   const handleDeploy = async () => {
@@ -147,8 +163,7 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
       return
     }
 
-    const signerAddress = await signer?.getAddress()
-    if (founderParams[0].wallet !== signerAddress) {
+    if (founderParams[0].wallet !== address) {
       setDeploymentError(DEPLOYMENT_ERROR.MISMATCHING_SIGNER)
       return
     }
@@ -166,23 +181,41 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
     setIsPendingTransaction(true)
     let transaction
     try {
-      const config = await prepareWriteContract({
-        address: PUBLIC_MANAGER_ADDRESS[chain.id],
-        chainId: chain.id,
-        abi: managerAbi,
-        functionName: 'deploy',
-        signer: signer,
-        args: [founderParams, tokenParams, auctionParams, govParams],
-      })
-      const { wait } = await writeContract(config)
-      transaction = await wait()
+      let config: any
+      if (version?.startsWith('2')) {
+        config = await prepareWriteContract({
+          address: PUBLIC_MANAGER_ADDRESS[chain.id],
+          chainId: chain.id,
+          abi: managerV2Abi,
+          functionName: 'deploy',
+          args: [
+            founderParams,
+            { ...tokenParams, reservedUntilTokenId: 0n, metadataRenderer: NULL_ADDRESS },
+            {
+              ...auctionParams,
+              founderRewardRecipent: NULL_ADDRESS,
+              founderRewardBps: 0,
+            },
+            govParams,
+          ],
+        })
+      } else {
+        config = await prepareWriteContract({
+          address: PUBLIC_MANAGER_ADDRESS[chain.id],
+          chainId: chain.id,
+          abi: managerAbi,
+          functionName: 'deploy',
+          args: [founderParams, tokenParams, auctionParams, govParams],
+        })
+      }
+
+      const tx = await writeContract(config)
+      if (tx.hash) transaction = await waitForTransaction({ hash: tx.hash })
     } catch (e) {
       console.log('e', e)
       setIsPendingTransaction(false)
       return
     }
-
-    const managerInterface = new ethers.utils.Interface(managerAbi)
 
     //keccak256 hashed value of DAODeployed(address,address,address,address,address)
     const deployEvent = transaction?.logs.find(
@@ -193,9 +226,11 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
 
     let parsedEvent
     try {
-      parsedEvent = managerInterface.parseLog({
+      parsedEvent = decodeEventLog({
+        abi: managerAbi,
+        eventName: 'DAODeployed',
         topics: deployEvent?.topics || [],
-        data: deployEvent?.data || '',
+        data: deployEvent?.data || '0x',
       })
     } catch {}
 
@@ -207,13 +242,7 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
       return
     }
 
-    setDeployedDao({
-      token: deployedAddresses[0],
-      metadata: deployedAddresses[1],
-      auction: deployedAddresses[2],
-      treasury: deployedAddresses[3],
-      governor: deployedAddresses[4],
-    })
+    setDeployedDao(deployedAddresses)
     setIsPendingTransaction(false)
     setFulfilledSections(title)
   }
@@ -334,6 +363,38 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
               </Flex>
             </Flex>
 
+            {isL2 && (
+              <Flex mt="x4">
+                <Flex align={'center'} justify={'center'} gap={'x4'}>
+                  <Flex
+                    align={'center'}
+                    justify={'center'}
+                    className={
+                      deployCheckboxStyleVariants[
+                        hasConfirmedRewards ? 'confirmed' : 'default'
+                      ]
+                    }
+                    onClick={() => setHasConfirmedRewards((bool) => !bool)}
+                  >
+                    {hasConfirmedRewards && <Icon fill="background1" id="check" />}
+                  </Flex>
+
+                  <Flex className={deployCheckboxHelperText}>
+                    I have read the{' '}
+                    <a
+                      href={'https://docs.zora.co/docs/guides/builder-protocol-rewards'}
+                      target="_blank"
+                      className={atoms({ color: 'accent' })}
+                      rel="noreferrer"
+                    >
+                      Builder Protocol Rewards documentation
+                    </a>{' '}
+                    and understand how Protocol Rewards apply to this DAO.
+                  </Flex>
+                </Flex>
+              </Flex>
+            )}
+
             {deploymentError && (
               <Flex mt={'x4'} color="negative">
                 {deploymentError}
@@ -357,10 +418,12 @@ export const ReviewAndDeploy: React.FC<ReviewAndDeploy> = ({ title }) => {
                 handleClick={handleDeploy}
                 w={'100%'}
                 disabled={
-                  !signer ||
+                  !address ||
                   !hasConfirmedTerms ||
                   !hasConfirmedChain ||
-                  isPendingTransaction
+                  (isL2 && !hasConfirmedRewards) ||
+                  isPendingTransaction ||
+                  isVersionLoading
                 }
                 className={
                   deployContractButtonStyle[isPendingTransaction ? 'pending' : 'default']

@@ -1,9 +1,13 @@
-import { SendTransactionResult, prepareWriteContract, writeContract } from '@wagmi/core'
-import { Atoms, Box, Flex, Stack, Text, theme } from '@zoralabs/zord'
-import { BigNumber } from 'ethers'
+import { Atoms, Box, Button, Flex, Stack, Text, theme } from '@zoralabs/zord'
 import { Field, Formik, Form as FormikForm } from 'formik'
 import React, { Fragment } from 'react'
 import { useSWRConfig } from 'swr'
+import {
+  SendTransactionResult,
+  prepareWriteContract,
+  waitForTransaction,
+  writeContract,
+} from 'wagmi/actions'
 
 import { ContractButton } from 'src/components/ContractButton'
 import { Icon } from 'src/components/Icon'
@@ -68,20 +72,20 @@ const VoteModal: React.FC<{
       const config = await prepareWriteContract({
         ...governorContractParams,
         functionName: 'castVoteWithReason',
-        args: [proposalId as BytesType, BigNumber.from(values.choice), values.reason],
+        args: [proposalId as BytesType, BigInt(values.choice as Choice), values.reason],
       })
       vote = writeContract(config)
     } else {
       const config = await prepareWriteContract({
         ...governorContractParams,
         functionName: 'castVote',
-        args: [proposalId as BytesType, BigNumber.from(values.choice)],
+        args: [proposalId as BytesType, BigInt(values.choice!)],
       })
       vote = writeContract(config)
     }
 
-    const tx = await vote
-    await tx?.wait()
+    const { hash } = await vote
+    await waitForTransaction({ hash })
 
     await mutate(
       [SWR_KEYS.PROPOSAL, chain.id, proposalId],
@@ -112,11 +116,7 @@ const VoteModal: React.FC<{
   return (
     <Fragment>
       {/* Vote Modal */}
-      <AnimatedModal
-        open={showVoteModal}
-        close={() => setShowVoteModal(false)}
-        size={isCastVoteSuccess ? 'small' : 'medium'}
-      >
+      <AnimatedModal open={showVoteModal} size={isCastVoteSuccess ? 'small' : 'medium'}>
         {isCastVoteSuccess ? (
           <SuccessModalContent
             success={true}
@@ -125,14 +125,28 @@ const VoteModal: React.FC<{
           />
         ) : (
           <Box>
-            <Box>
-              <Text variant="heading-md" className={proposalFormTitle}>
-                {votesAvailable === 0 ? 'Submit Vote' : 'Submit Votes'}
-              </Text>
-              <Text variant="paragraph-sm" color="tertiary">
-                Proposal: {title}
-              </Text>
-            </Box>
+            <Flex justify={'space-between'}>
+              <Box>
+                <Text variant="heading-md" className={proposalFormTitle}>
+                  {votesAvailable === 0 ? 'Submit Vote' : 'Submit Votes'}
+                </Text>
+                <Text variant="paragraph-sm" color="tertiary">
+                  Proposal: {title}
+                </Text>
+              </Box>
+              <Button
+                variant="ghost"
+                onClick={() => setShowVoteModal(false)}
+                p={'x0'}
+                size="xs"
+                style={{
+                  // prop padding does not change padding to 0
+                  padding: 0,
+                }}
+              >
+                <Icon id="cross" />
+              </Button>
+            </Flex>
 
             <Formik initialValues={initialValues} onSubmit={handleSubmit}>
               {({ values, submitForm, isSubmitting, setFieldValue }) => (

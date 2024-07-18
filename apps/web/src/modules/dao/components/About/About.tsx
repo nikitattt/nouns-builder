@@ -1,5 +1,4 @@
 import { Box, Flex, Grid, Text } from '@zoralabs/zord'
-import HtmlReactParser from 'html-react-parser'
 import { getFetchableUrl } from 'ipfs-service'
 import Image from 'next/legacy/image'
 import React from 'react'
@@ -14,7 +13,6 @@ import { useLayoutStore } from 'src/stores'
 import { useChainStore } from 'src/stores/useChainStore'
 import {
   about,
-  daoDescription,
   daoInfo,
   daoName,
   statistic,
@@ -25,6 +23,7 @@ import { formatCryptoVal } from 'src/utils/numbers'
 
 import { useDaoStore } from '../../stores'
 import { MembersList } from '../MembersList'
+import { DaoDescription } from './DaoDescription'
 import { Founder } from './Founder'
 import { Statistic } from './Statistic'
 
@@ -47,6 +46,7 @@ export const About: React.FC = () => {
   }
 
   const { data: contractData } = useContractReads({
+    allowFailure: false,
     contracts: [
       { ...tokenContractParams, functionName: 'name' },
       { ...tokenContractParams, functionName: 'totalSupply' },
@@ -57,8 +57,10 @@ export const About: React.FC = () => {
     ] as const,
   })
 
-  const [name, totalSupply, founders, daoImage, description] =
-    unpackOptionalArray(contractData, 6)
+  const [name, totalSupply, founders, daoImage, description] = unpackOptionalArray(
+    contractData,
+    6
+  )
 
   const { data: balance } = useBalance({
     address: treasury as Address,
@@ -130,7 +132,7 @@ export const About: React.FC = () => {
           address={treasury}
         />
         <Statistic title="Owners" content={data?.ownerCount} />
-        <Statistic title="Total supply" content={totalSupply?.toNumber()} />
+        <Statistic title="Total supply" content={Number(totalSupply)} />
         <Box className={statistic} width={'100%'}>
           <Text color="tertiary">Chain</Text>
           <Flex align={'center'} mt={{ '@initial': 'x1', '@768': 'x3' }}>
@@ -144,19 +146,13 @@ export const About: React.FC = () => {
         </Box>
       </Flex>
 
-      {typeof description !== 'undefined' && description !== null ? (
-        <Box mt={{ '@initial': 'x4', '@768': 'x6' }}>
-          <Text className={daoDescription}>
-            {HtmlReactParser(description.replace(/\\n/g, '<br />'))}
-          </Text>
-        </Box>
-      ) : null}
+      <DaoDescription description={description} />
 
       <Text variant="heading-xs" mt="x16" style={{ fontWeight: 800 }}>
         Founders
       </Text>
 
-      {typeof founders !== 'undefined' && founders.length > 0 ? (
+      {founders && founders?.length > 0 ? (
         <Grid columns={isMobile ? 1 : 2} mt="x6" gap="x4">
           {founders
             .filter((founder) => founder.ownershipPct > 0)
@@ -169,7 +165,7 @@ export const About: React.FC = () => {
           No founders allocation set.
         </Text>
       )}
-      <MembersList totalSupply={totalSupply?.toNumber()} ownerCount={data?.ownerCount} />
+      <MembersList totalSupply={Number(totalSupply)} ownerCount={data?.ownerCount} />
     </Box>
   )
 }

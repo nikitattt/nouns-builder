@@ -1,18 +1,18 @@
 import { Flex, Stack, Text } from '@zoralabs/zord'
-import { BigNumber, Contract, ethers } from 'ethers'
-import { FieldArray, Formik, FormikValues } from 'formik'
+import { Field, FieldArray, FieldProps, Formik, FormikValues } from 'formik'
 import { AnimatePresence, motion } from 'framer-motion'
 import isEqual from 'lodash/isEqual'
 import { useRouter } from 'next/router'
 import React, { BaseSyntheticEvent } from 'react'
-import { Address, useContract, useContractReads } from 'wagmi'
+import { encodeFunctionData, formatEther } from 'viem'
+import { Address, useContractReads } from 'wagmi'
 
 import DaysHoursMinsSecs from 'src/components/Fields/DaysHoursMinsSecs'
 import Radio from 'src/components/Fields/Radio'
 import SmartInput from 'src/components/Fields/SmartInput'
 import StickySave from 'src/components/Fields/StickySave'
-import TextArea from 'src/components/Fields/TextArea'
 import { NUMBER, TEXT } from 'src/components/Fields/types'
+import { MarkdownEditor } from 'src/components/MarkdownEditor'
 import SingleImageUpload from 'src/components/SingleImageUpload/SingleImageUpload'
 import { NULL_ADDRESS } from 'src/constants/addresses'
 import { auctionAbi, governorAbi, metadataAbi, tokenAbi } from 'src/data/contract/abis'
@@ -23,14 +23,13 @@ import {
   useProposalStore,
 } from 'src/modules/create-proposal'
 import { formValuesToTransactionMap } from 'src/modules/dao/utils/adminFormFieldToTransaction'
-import { useLayoutStore } from 'src/stores'
 import { useChainStore } from 'src/stores/useChainStore'
 import { sectionWrapperStyle } from 'src/styles/dao.css'
 import { AddressType } from 'src/typings'
 import { getEnsAddress } from 'src/utils/ens'
 import { compareAndReturn, fromSeconds, unpackOptionalArray } from 'src/utils/helpers'
 
-import { DaoContracts, useDaoStore } from '../../stores'
+import { useDaoStore } from '../../stores'
 import { AdminFormValues, adminValidationSchema } from './AdminForm.schema'
 import { AdminFounderAllocationFields } from './AdminFounderAllocationFields'
 import { Section } from './Section'
@@ -54,12 +53,11 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
 
   const createProposal = useProposalStore((state) => state.createProposal)
   const addresses = useDaoStore((state) => state.addresses)
-  const provider = useLayoutStore((state) => state.provider)
   const chain = useChainStore((x) => x.chain)
 
   const auctionContractParams = {
     abi: auctionAbi,
-    address: addresses.auction,
+    address: addresses.auction as Address,
   }
 
   const governorContractParams = {
@@ -77,12 +75,8 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
     address: addresses?.token as Address,
   }
 
-  const auctionContract = useContract(auctionContractParams)
-  const governorContract = useContract(governorContractParams)
-  const metadataContract = useContract(metadataContractParams)
-  const tokenContract = useContract(tokenContractParams)
-
   const { data } = useContractReads({
+    allowFailure: false,
     contracts: [
       { ...auctionContractParams, chainId: chain.id, functionName: 'duration' },
       { ...auctionContractParams, chainId: chain.id, functionName: 'reservePrice' },
@@ -122,13 +116,6 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
     founders,
   ] = unpackOptionalArray(data, 12)
 
-  const contracts: DaoContracts = {
-    auctionContract: auctionContract ?? undefined,
-    governorContract: governorContract ?? undefined,
-    metadataContract: metadataContract ?? undefined,
-    tokenContract: tokenContract ?? undefined,
-  }
-
   const initialValues: AdminFormValues = {
     /* artwork */
     projectDescription: description?.replace(/\\n/g, String.fromCharCode(13, 10)) || '',
@@ -142,8 +129,8 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
     /* governor */
     proposalThreshold: Number(proposalThresholdBps) / 100 || 0,
     quorumThreshold: Number(quorumVotesBps) / 100 || 0,
-    votingPeriod: fromSeconds(votingPeriod && Number(votingPeriod)),
-    votingDelay: fromSeconds(votingDelay && Number(votingDelay)),
+    votingPeriod: fromSeconds(votingPeriod && BigInt(votingPeriod)),
+    votingDelay: fromSeconds(votingDelay && BigInt(votingDelay)),
     founderAllocation:
       founders?.map((x) => ({
         founderAddress: x.wallet,
@@ -156,14 +143,13 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
     /* auction */
     auctionDuration: fromSeconds(auctionDuration && Number(auctionDuration)),
     auctionReservePrice: auctionReservePrice
-      ? parseFloat(ethers.utils.formatUnits(auctionReservePrice))
+      ? parseFloat(formatEther(auctionReservePrice))
       : 0,
   }
 
   const withPauseUnpause = (
     transactions: BuilderTransaction[],
-    auctionAddress: Address,
-    auctionContract?: Contract
+    auctionAddress: Address
   ) => {
     const targetAddresses = transactions
       .flatMap((txn) => txn.transactions)
@@ -179,7 +165,10 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
         {
           functionSignature: 'pause()',
           target: auctionAddress,
-          calldata: auctionContract?.interface.encodeFunctionData('pause') || '',
+          calldata: encodeFunctionData({
+            abi: auctionAbi,
+            functionName: 'pause',
+          }),
           value: '',
         },
       ],
@@ -191,7 +180,11 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
         {
           functionSignature: 'unpause()',
           target: auctionAddress,
-          calldata: auctionContract?.interface.encodeFunctionData('unpause') || '',
+          calldata:
+            encodeFunctionData({
+              abi: auctionAbi,
+              functionName: 'unpause',
+            }) || '',
           value: '',
         },
       ],
@@ -207,6 +200,7 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
     let transactions: BuilderTransaction[] = []
 
     let field: keyof AdminFormValues
+
     for (field in values) {
       let value = values[field]
 
@@ -215,25 +209,25 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
       }
 
       if (field === 'vetoer') {
-        value = await getEnsAddress(value as string, provider)
+        value = await getEnsAddress(value as string)
       }
 
       if (field === 'founderAllocation') {
         // @ts-ignore
         value = (value as TokenAllocation[]).map(
           ({ founderAddress, allocationPercentage, endDate }) => ({
-            wallet: founderAddress as AddressType,
-            ownershipPct: allocationPercentage
-              ? BigNumber.from(allocationPercentage)
-              : BigNumber.from(0),
-            vestExpiry: BigNumber.from(Math.floor(new Date(endDate).getTime() / 1000)),
+            founderAddress: founderAddress as AddressType,
+            allocationPercentage: allocationPercentage
+              ? BigInt(allocationPercentage)
+              : 0n,
+            endDate: BigInt(Math.floor(new Date(endDate).getTime() / 1000)),
           })
         )
       }
 
       const transactionProperties = formValuesToTransactionMap[field]
       // @ts-ignore
-      const calldata = transactionProperties.constructCalldata(contracts, value)
+      const calldata = transactionProperties.constructCalldata(value)
       const target = transactionProperties.getTarget(addresses)
 
       if (target)
@@ -268,8 +262,7 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
 
     const transactionsWithPauseUnpause = withPauseUnpause(
       transactions,
-      addresses?.auction as Address,
-      auctionContract ?? undefined
+      addresses?.auction as Address
     )
 
     createProposal({
@@ -287,7 +280,7 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
       <Flex direction={'column'} w={'100%'}>
         <Formik
           initialValues={initialValues}
-          validationSchema={adminValidationSchema(provider)}
+          validationSchema={adminValidationSchema()}
           onSubmit={(values, formik: FormikValues) =>
             handleUpdateSettings(values, formik)
           }
@@ -304,6 +297,7 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
             const changes =
               compareAndReturn(formik.initialValues, formik.values).length +
               founderChanges
+
             return (
               <Flex direction={'column'} w={'100%'}>
                 <Stack>
@@ -321,16 +315,18 @@ export const AdminForm: React.FC<AdminFormProps> = ({ collectionAddress }) => {
                       helperText={'Upload'}
                     />
 
-                    <TextArea
-                      {...formik.getFieldProps('projectDescription')}
-                      inputLabel={'Collection Description'}
-                      formik={formik}
-                      id={'projectDescription'}
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      errorMessage={formik.errors['projectDescription']}
-                      placeholder={'Nouns is an experiment which combines...'}
-                    />
+                    <Field name="projectDescription">
+                      {({ field }: FieldProps) => (
+                        <MarkdownEditor
+                          value={field.value}
+                          onChange={(value: string) =>
+                            formik?.setFieldValue(field.name, value)
+                          }
+                          inputLabel={'DAO Description'}
+                          errorMessage={formik.errors['projectDescription']}
+                        />
+                      )}
+                    </Field>
 
                     <SmartInput
                       {...formik.getFieldProps('daoWebsite')}

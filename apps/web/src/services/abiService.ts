@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { utils } from 'ethers'
+import { Address, getAddress, pad, trim } from 'viem'
 
 import { CHAIN_ID } from 'src/typings'
 
@@ -22,11 +22,12 @@ export type ContractABIResult = {
 const CHAIN_API_LOOKUP: Record<CHAIN_ID, string> = {
   [CHAIN_ID.ETHEREUM]: 'api.etherscan.io',
   [CHAIN_ID.OPTIMISM]: 'api-optimistic.etherscan.io',
-  [CHAIN_ID.GOERLI]: 'api-goerli.etherscan.io',
-  [CHAIN_ID.OPTIMISM_GOERLI]: 'api-goerli-optimistic.etherscan.io',
-  [CHAIN_ID.BASE_GOERLI]: 'api-goerli.basescan.org',
+  [CHAIN_ID.SEPOLIA]: 'api-sepolia.etherscan.io',
+  [CHAIN_ID.OPTIMISM_SEPOLIA]: 'api-sepolia-optimistic.etherscan.io',
+  [CHAIN_ID.BASE]: 'api.basescan.org',
+  [CHAIN_ID.BASE_SEPOLIA]: 'api-sepolia.basescan.org',
   [CHAIN_ID.ZORA]: 'explorer.zora.energy',
-  [CHAIN_ID.ZORA_GOERLI]: 'testnet.explorer.zora.energy',
+  [CHAIN_ID.ZORA_SEPOLIA]: 'sepolia.explorer.zora.energy',
   [CHAIN_ID.FOUNDRY]: '',
 }
 
@@ -42,7 +43,7 @@ export const getContractABIByAddress = async (
 
   let address: any
   try {
-    address = utils.getAddress(addressInput)
+    address = getAddress(addressInput)
   } catch {
     throw new InvalidRequestError('Invalid address')
   }
@@ -54,15 +55,15 @@ export const getContractABIByAddress = async (
   let fetchedAddress = address
 
   // Only handles EIP1967 proxy slots – does not handle minimal proxies (EIP11)
-  const proxyAddress = await getProvider(chainId).getStorageAt(
+  const proxyAddress = await getProvider(chainId).getStorageAt({
     address,
-    EIP1967_PROXY_STORAGE_SLOT
-  )
+    slot: EIP1967_PROXY_STORAGE_SLOT,
+  })
+
   if (proxyAddress != ZERO_BYTES32) {
-    fetchedAddress = utils.hexZeroPad(
-      utils.stripZeros(proxyAddress),
-      20
-    ) as typeof fetchedAddress
+    fetchedAddress = pad(trim(proxyAddress as Address), {
+      size: 20,
+    }) as typeof fetchedAddress
   }
 
   const chainIdStr = chainId.toString()

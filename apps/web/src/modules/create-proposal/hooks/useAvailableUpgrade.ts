@@ -1,11 +1,11 @@
-import { Contract } from 'ethers'
 import intersection from 'lodash/intersection'
 import isNil from 'lodash/isNil'
 import isUndefined from 'lodash/isUndefined'
 import lt from 'lodash/lt'
 import pickBy from 'lodash/pickBy'
 import useSWR from 'swr'
-import { useContract, useContractReads } from 'wagmi'
+import { encodeFunctionData } from 'viem'
+import { useContractReads } from 'wagmi'
 
 import { PUBLIC_MANAGER_ADDRESS } from 'src/constants/addresses'
 import SWR_KEYS from 'src/constants/swrKeys'
@@ -55,16 +55,13 @@ export const useAvailableUpgrade = ({
     chainId,
   }
 
-  const auctionContract = useContract({ abi: auctionAbi, address: addresses?.auction })
-
-  const managerContract = useContract(contract)
-
   const { data: proposals } = useSWR(
     !!addresses?.token ? [SWR_KEYS.PROPOSALS_CALLDATAS, chainId, addresses?.token] : null,
     () => getProposals(chainId, addresses?.token as string, 100)
   )
 
   const { data, isLoading, isError } = useContractReads({
+    allowFailure: false,
     enabled: !!addresses?.token,
     contracts: [
       {
@@ -77,7 +74,10 @@ export const useAvailableUpgrade = ({
         ...contract,
         functionName: 'contractVersion',
       },
-
+      {
+        ...contract,
+        functionName: 'getLatestVersions',
+      },
       {
         ...contract,
         functionName: 'getDAOVersions',
@@ -107,6 +107,7 @@ export const useAvailableUpgrade = ({
 
   const [
     paused,
+    managerVersion,
     latest,
     versions,
     tokenImpl,
@@ -130,11 +131,11 @@ export const useAvailableUpgrade = ({
   }
 
   const daoVersions = {
-    governor: versions?.governor,
-    token: versions?.token,
-    treasury: versions?.treasury,
-    auction: versions?.auction,
-    metadata: versions?.metadata,
+    governor: versions?.governor || '1.0.0',
+    token: versions?.token || '1.0.0',
+    treasury: versions?.treasury || '1.0.0',
+    auction: versions?.auction || '1.0.0',
+    metadata: versions?.metadata || '1.0.0',
   }
 
   const managerImplementationAddresses: Record<ContractType, AddressType> = {
@@ -146,18 +147,28 @@ export const useAvailableUpgrade = ({
   }
 
   const getUpgradesForVersion = (
-    versions: DaoVersions,
-    version: string
+    daoVersions: DaoVersions,
+    givenVersion: DaoVersions
   ): Record<AddressType, string> =>
-    pickBy(versions, (v) => isNil(v) || v === '' || lt(v, version))
+    pickBy(daoVersions, (val, key) => {
+      return isNil(val) || val === '' || lt(val, givenVersion[key as keyof DaoVersions])
+    })
 
-  const givenVersion = contractVersion ? contractVersion : latest
+  const givenVersion: DaoVersions = contractVersion
+    ? {
+        token: contractVersion,
+        governor: contractVersion,
+        auction: contractVersion,
+        metadata: contractVersion,
+        treasury: contractVersion,
+      }
+    : latest
   const upgradesNeededForGivenVersion = getUpgradesForVersion(daoVersions, givenVersion)
 
   // meets the required given version, no upgrades needed
   if (Object.values(upgradesNeededForGivenVersion).length === 0) {
     return {
-      latest,
+      latest: managerVersion,
       currentVersions: daoVersions,
       shouldUpgrade: false,
       transaction: undefined,
@@ -168,26 +179,28 @@ export const useAvailableUpgrade = ({
     }
   }
 
-  const withPauseUnpause = (
-    paused: boolean,
-    upgrades: Transaction[],
-    auctionContract?: Contract
-  ): Transaction[] => {
-    if (paused || typeof auctionContract === undefined) {
+  const withPauseUnpause = (paused: boolean, upgrades: Transaction[]): Transaction[] => {
+    if (paused) {
       return upgrades
     }
 
     const pause = {
       target: addresses?.auction as AddressType,
       functionSignature: 'pause()',
-      calldata: auctionContract?.interface.encodeFunctionData('pause') || '',
+      calldata: encodeFunctionData({
+        abi: auctionAbi,
+        functionName: 'pause',
+      }),
       value: '',
     }
 
     const unpause = {
       target: addresses?.auction as AddressType,
       functionSignature: 'unpause()',
-      calldata: auctionContract?.interface.encodeFunctionData('unpause') || '',
+      calldata: encodeFunctionData({
+        abi: auctionAbi,
+        functionName: 'unpause',
+      }),
       value: '',
     }
 
@@ -195,17 +208,17 @@ export const useAvailableUpgrade = ({
   }
 
   const createUpgradeTransactions = (
-    upgrades: Record<AddressType, string>,
-    managerContract?: Contract
+    upgrades: Record<AddressType, string>
   ): Transaction[] =>
     Object.keys(upgrades).map((contract) => ({
       value: '',
       target: addresses[contract as ContractType] as AddressType,
       functionSignature: 'upgradeTo(address)',
-      calldata:
-        managerContract?.interface?.encodeFunctionData('upgradeTo(address)', [
-          managerImplementationAddresses[contract as ContractType],
-        ]) || '',
+      calldata: encodeFunctionData({
+        abi: managerAbi,
+        functionName: 'upgradeTo',
+        args: [managerImplementationAddresses[contract as ContractType]],
+      }),
     }))
 
   const findActiveUpgradeProposal = (
@@ -231,10 +244,7 @@ export const useAvailableUpgrade = ({
 
   const upgradesNeededForLatestVersion = getUpgradesForVersion(daoVersions, latest)
 
-  const upgradeTransactions = createUpgradeTransactions(
-    upgradesNeededForLatestVersion,
-    managerContract ?? undefined
-  )
+  const upgradeTransactions = createUpgradeTransactions(upgradesNeededForLatestVersion)
 
   const activeUpgradeProposal = findActiveUpgradeProposal(
     proposals?.proposals,
@@ -245,20 +255,16 @@ export const useAvailableUpgrade = ({
 
   const upgrade = {
     type: TransactionType.UPGRADE,
-    summary: `Upgrade contracts to Nouns Builder v${latest}`,
-    transactions: withPauseUnpause(
-      paused,
-      upgradeTransactions,
-      auctionContract ?? undefined
-    ),
+    summary: `Upgrade contracts to Nouns Builder v${managerVersion}`,
+    transactions: withPauseUnpause(paused, upgradeTransactions),
   }
 
   return {
-    latest,
+    latest: managerVersion,
     shouldUpgrade: noActiveUpgradeProposal,
     currentVersions: daoVersions,
-    date: CONTRACT_VERSION_DETAILS?.[latest]['date'],
-    description: `This release upgrades the DAO to v${latest} to add several features, improvements and bug fixes.`,
+    date: CONTRACT_VERSION_DETAILS?.[managerVersion]['date'],
+    description: `This release upgrades the DAO to v${managerVersion} to add several features, improvements and bug fixes.`,
     totalContractUpgrades: upgradeTransactions.length,
     activeUpgradeProposalId: activeUpgradeProposal?.proposalId,
     transaction: upgrade,

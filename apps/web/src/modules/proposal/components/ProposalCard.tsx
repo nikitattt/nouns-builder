@@ -23,7 +23,6 @@ type ProposalCardProps = {
 }
 
 export const ProposalCard: React.FC<ProposalCardProps> = ({
-  proposalId,
   title,
   proposalNumber,
   state,
@@ -41,7 +40,9 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
   return (
     <Link
       href={
-        collection ? `/dao/${router?.query.network}/${collection}/vote/${proposalId}` : ''
+        collection
+          ? `/dao/${router?.query.network}/${collection}/vote/${proposalNumber}`
+          : ''
       }
       passHref
     >

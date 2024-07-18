@@ -3,10 +3,10 @@ import { FormikProps } from 'formik'
 import { motion } from 'framer-motion'
 import React, { ChangeEventHandler, ReactElement, WheelEvent } from 'react'
 import useSWR from 'swr'
+import { Address } from 'wagmi'
 
 import { Icon } from 'src/components/Icon'
 import SWR_KEYS from 'src/constants/swrKeys'
-import { useLayoutStore } from 'src/stores'
 import { getEnsName } from 'src/utils/ens'
 import { isEmpty } from 'src/utils/helpers'
 
@@ -62,11 +62,9 @@ const SmartInput: React.FC<SmartInputProps> = ({
   disableWheelEvent = type === 'number',
   isAddress,
 }) => {
-  const { provider } = useLayoutStore()
-
   const { data: ensName } = useSWR(
     isAddress ? [SWR_KEYS.ENS, value] : null,
-    async () => await getEnsName(value as string, provider)
+    async () => await getEnsName(value as Address)
   )
 
   /*

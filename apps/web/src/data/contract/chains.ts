@@ -1,32 +1,39 @@
 import { configureChains } from 'wagmi'
-import { baseGoerli, goerli, mainnet, optimism, optimismGoerli } from 'wagmi/chains'
-import { alchemyProvider } from 'wagmi/providers/alchemy'
+import {
+  base,
+  baseSepolia,
+  mainnet,
+  optimism,
+  optimismSepolia,
+  sepolia,
+  zora,
+  zoraSepolia,
+} from 'wagmi/chains'
 import { jsonRpcProvider } from 'wagmi/providers/jsonRpc'
 
-import { PUBLIC_IS_TESTNET, zora, zoraGoerli } from 'src/constants/defaultChains'
+import { PUBLIC_IS_TESTNET } from 'src/constants/defaultChains'
 import { RPC_URL } from 'src/constants/rpc'
 import { CHAIN_ID } from 'src/typings'
 
-const MAINNET_CHAINS = [mainnet, zora, optimism]
+const MAINNET_CHAINS = [mainnet, zora, base, optimism]
 // Mainnet is required here due to hooks like useEnsData that only pull data from mainnet
-const TESTNET_CHAINS = [mainnet, goerli, optimismGoerli, baseGoerli, zoraGoerli]
+const TESTNET_CHAINS = [mainnet, sepolia, optimismSepolia, baseSepolia, zoraSepolia]
 
-const AVAILIBLE_CHAINS = PUBLIC_IS_TESTNET ? TESTNET_CHAINS : MAINNET_CHAINS
+export const L1_CHAINS = PUBLIC_IS_TESTNET ? [CHAIN_ID.SEPOLIA] : [CHAIN_ID.ETHEREUM]
 
-const { chains, provider } = configureChains(
-  [...AVAILIBLE_CHAINS],
+export const L2_CHAINS = PUBLIC_IS_TESTNET
+  ? [CHAIN_ID.ZORA_SEPOLIA, CHAIN_ID.BASE_SEPOLIA, CHAIN_ID.OPTIMISM_SEPOLIA]
+  : [CHAIN_ID.ZORA, CHAIN_ID.BASE, CHAIN_ID.OPTIMISM]
+
+const { chains, publicClient } = configureChains(
+  [...TESTNET_CHAINS, ...MAINNET_CHAINS],
   [
-    alchemyProvider({
-      apiKey: process.env.NEXT_PUBLIC_ALCHEMY_ID as string,
-      stallTimeout: 1000,
-    }),
     jsonRpcProvider({
       rpc: (chain) => ({
         http: RPC_URL[chain.id as CHAIN_ID],
       }),
-      stallTimeout: 1000,
     }),
   ]
 )
 
-export { chains, provider }
+export { chains, publicClient }

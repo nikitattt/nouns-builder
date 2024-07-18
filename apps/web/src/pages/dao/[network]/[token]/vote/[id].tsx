@@ -1,19 +1,24 @@
 import { Box, Flex } from '@zoralabs/zord'
-import axios from 'axios'
-import { ethers } from 'ethers'
-import { isAddress } from 'ethers/lib/utils.js'
 import { GetServerSideProps } from 'next'
 import { useRouter } from 'next/router'
 import React, { Fragment } from 'react'
 import useSWR, { unstable_serialize } from 'swr'
+import { getAddress, isAddress, isAddressEqual } from 'viem'
+import { useBalance } from 'wagmi'
 
+import { Icon } from 'src/components/Icon'
 import { Meta } from 'src/components/Meta'
 import { CACHE_TIMES } from 'src/constants/cacheTimes'
 import { PUBLIC_DEFAULT_CHAINS } from 'src/constants/defaultChains'
 import SWR_KEYS from 'src/constants/swrKeys'
-import { getProposal } from 'src/data/subgraph/requests/proposalQuery'
+import { SDK } from 'src/data/subgraph/client'
+import {
+  formatAndFetchState,
+  getProposal,
+} from 'src/data/subgraph/requests/proposalQuery'
+import { Proposal_Filter } from 'src/data/subgraph/sdk.generated'
 import { getDaoLayout } from 'src/layouts/DaoLayout'
-import { SectionHandler } from 'src/modules/dao'
+import { DaoContractAddresses, SectionHandler } from 'src/modules/dao'
 import {
   ProposalDescription,
   ProposalDetailsGrid,
@@ -22,7 +27,6 @@ import {
 } from 'src/modules/proposal'
 import { ProposalVotes } from 'src/modules/proposal/components/ProposalVotes'
 import { NextPageWithLayout } from 'src/pages/_app'
-import { DaoResponse } from 'src/pages/api/dao/[network]/[token]'
 import { ProposalOgMetadata } from 'src/pages/api/og/proposal'
 import { useChainStore } from 'src/stores/useChainStore'
 import { propPageWrapper } from 'src/styles/Proposals.css'
@@ -34,6 +38,18 @@ export interface VotePageProps {
   ogImageURL: string
 }
 
+const BAD_ACTORS = [
+  '0xfd637806e0D22Ca8158AB8bb5826e6fEDa82c15f',
+  '0xb8fa1f523976008e9db686fcfdb5e57f1ca43f50',
+]
+
+const checkDrain = (values: string[], treasuryBalance: bigint) => {
+  const proposalValue = values.reduce((acc, numStr) => acc + BigInt(numStr), BigInt(0))
+  const thresholdAmt = (treasuryBalance * BigInt(90)) / BigInt(100)
+
+  return proposalValue >= thresholdAmt
+}
+
 const VotePage: NextPageWithLayout<VotePageProps> = ({
   proposalId,
   daoName,
@@ -41,6 +57,12 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
 }) => {
   const { query } = useRouter()
   const chain = useChainStore((x) => x.chain)
+  const { addresses } = useDaoStore()
+
+  const { data: balance } = useBalance({
+    address: addresses?.treasury as `0x${string}`,
+    chainId: chain.id,
+  })
 
   const { data: proposal } = useSWR([SWR_KEYS.PROPOSAL, chain.id, proposalId], (_, id) =>
     getProposal(chain.id, proposalId)
@@ -66,6 +88,15 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
     return null
   }
 
+  const displayActions = isProposalOpen(proposal.state)
+  const isBadActor = BAD_ACTORS.some((baddie) =>
+    isAddressEqual(proposal.proposer, baddie as AddressType)
+  )
+  const isPossibleDrain = balance?.value
+    ? checkDrain(proposal.values, balance?.value)
+    : false
+  const warn = displayActions && (isBadActor || isPossibleDrain)
+
   return (
     <Fragment>
       <Meta
@@ -78,6 +109,26 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
       <Flex position="relative" direction="column">
         <Flex className={propPageWrapper} gap={{ '@initial': 'x2', '@768': 'x4' }}>
           <ProposalHeader proposal={proposal} />
+          <>
+            {warn && (
+              <Flex
+                w="100%"
+                backgroundColor="warning"
+                color="onWarning"
+                p="x4"
+                borderRadius="curved"
+                align="center"
+                justify="center"
+              >
+                <Icon fill="onWarning" id="warning" mr="x2" />
+                <Box fontWeight={'heading'}>
+                  {`Executing this proposal will transfer more than 90% of ${daoName}'s treasury.`}
+                </Box>
+              </Flex>
+            )}
+
+            {displayActions && <ProposalActions daoName={daoName} proposal={proposal} />}
+          </>
 
           <ProposalDetailsGrid proposal={proposal} />
         </Flex>
@@ -100,7 +151,7 @@ export default VotePage
 
 export const getServerSideProps: GetServerSideProps = async ({ params, req, res }) => {
   const collection = params?.token as AddressType
-  const proposalId = params?.id as string
+  const proposalIdOrNumber = params?.id as `0x${string}`
   const network = params?.network as string
 
   const chain = PUBLIC_DEFAULT_CHAINS.find((x) => x.slug === network)
@@ -113,14 +164,29 @@ export const getServerSideProps: GetServerSideProps = async ({ params, req, res 
 
   const env = process.env.VERCEL_ENV || 'development'
   const protocol = env === 'development' ? 'http' : 'https'
-  const baseUrl = process.env.VERCEL_URL || 'localhost:3000'
 
-  const [{ collectionName, collectionImage, addresses }, proposal] = await Promise.all([
-    axios
-      .get<DaoResponse>(`${protocol}://${baseUrl}/api/dao/${network}/${collection}`)
-      .then((x) => x.data),
-    getProposal(chain.id, proposalId),
-  ])
+  let where: Proposal_Filter
+
+  where = proposalIdOrNumber.startsWith('0x')
+    ? {
+        proposalId: proposalIdOrNumber,
+      }
+    : { proposalNumber: parseInt(proposalIdOrNumber), dao: collection.toLowerCase() }
+
+  const data = await SDK.connect(chain.id)
+    .proposalOGMetadata({
+      where,
+      first: 1,
+    })
+    .then((x) => (x.proposals.length > 0 ? x.proposals[0] : undefined))
+
+  if (!data) {
+    return {
+      notFound: true,
+    }
+  }
+
+  const proposal = await formatAndFetchState(chain.id, data)
 
   if (!proposal) {
     return {
@@ -128,14 +194,21 @@ export const getServerSideProps: GetServerSideProps = async ({ params, req, res 
     }
   }
 
-  if (
-    ethers.utils.getAddress(proposal.dao.tokenAddress) !==
-    ethers.utils.getAddress(collection)
-  ) {
+  if (getAddress(proposal.dao.tokenAddress) !== getAddress(collection)) {
     return {
       notFound: true,
     }
   }
+
+  const {
+    name,
+    contractImage,
+    tokenAddress,
+    metadataAddress,
+    governorAddress,
+    treasuryAddress,
+    auctionAddress,
+  } = data.dao
 
   const ogMetadata: ProposalOgMetadata = {
     proposal: {
@@ -146,8 +219,16 @@ export const getServerSideProps: GetServerSideProps = async ({ params, req, res 
       abstainVotes: proposal.abstainVotes,
       state: proposal.state,
     },
-    daoName: collectionName,
-    daoImage: collectionImage,
+    daoName: name,
+    daoImage: contractImage,
+  }
+
+  const addresses: DaoContractAddresses = {
+    token: tokenAddress,
+    metadata: metadataAddress,
+    governor: governorAddress,
+    treasury: treasuryAddress,
+    auction: auctionAddress,
   }
 
   const ogImageURL = `${protocol}://${
@@ -166,11 +247,12 @@ export const getServerSideProps: GetServerSideProps = async ({ params, req, res 
   return {
     props: {
       fallback: {
-        [unstable_serialize([SWR_KEYS.PROPOSAL, proposal.proposalId])]: proposal,
+        [unstable_serialize([SWR_KEYS.PROPOSAL, chain.id, proposal.proposalId])]:
+          proposal,
       },
-      daoName: collectionName,
+      daoName: name,
       ogImageURL,
-      proposalId,
+      proposalId: proposal.proposalId,
       addresses,
     },
   }
