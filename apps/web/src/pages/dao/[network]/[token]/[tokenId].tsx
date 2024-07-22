@@ -127,6 +127,7 @@ const TokenPage: NextPageWithLayout<TokenPageProps> = ({
   }, [description, name])
 
   const activeTab = query?.tab ? (query.tab as string) : 'About'
+  const showAuction = query?.auct ? (query.auct as string) === 'true' : false
 
   return (
     <Flex direction="column" pb="x30">
@@ -144,12 +145,14 @@ const TokenPage: NextPageWithLayout<TokenPageProps> = ({
         }}
       />
 
-      <DaoTopSection
-        chain={chain}
-        collection={collection}
-        auctionAddress={addresses.auction!}
-        token={token}
-      />
+      {showAuction && (
+        <DaoTopSection
+          chain={chain}
+          collection={collection}
+          auctionAddress={addresses.auction!}
+          token={token}
+        />
+      )}
       <SectionHandler
         sections={sections}
         activeTab={activeTab}

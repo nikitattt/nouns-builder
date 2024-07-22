@@ -93,6 +93,10 @@ export const Activity: React.FC = () => {
     return null
   }
 
+  const showWalletActionButton = query?.walletActions
+    ? (query.walletActions as string) === 'true'
+    : false
+
   return (
     <>
       <Flex direction={'column'} className={sectionWrapperStyle['proposals']} mx={'auto'}>
@@ -146,7 +150,7 @@ export const Activity: React.FC = () => {
                 )}
               </>
             ) : null}
-            {!address ? (
+            {!address && showWalletActionButton ? (
               <Button
                 className={submitProposalBtn}
                 onClick={openConnectModal}
@@ -154,7 +158,7 @@ export const Activity: React.FC = () => {
               >
                 Submit {!isMobile ? 'proposal' : null}
               </Button>
-            ) : (
+            ) : showWalletActionButton ? (
               <Button
                 className={submitProposalBtn}
                 onClick={address ? handleProposalCreation : openConnectModal}
@@ -163,7 +167,7 @@ export const Activity: React.FC = () => {
               >
                 Submit {!isMobile ? 'proposal' : null}
               </Button>
-            )}
+            ) : null}
           </Flex>
         </Flex>
         {addresses && (

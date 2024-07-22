@@ -112,6 +112,10 @@ export const NavMenu = () => {
     if (activeDropdown !== 'chainMenu') setIsOpenChainMenu(false)
   }, [activeDropdown, setIsOpenChainMenu])
 
+  const showWalletActionButton = !!router.query?.walletActions
+    ? (router.query.walletActions as string) === 'true'
+    : false
+
   return (
     <Flex align={'center'} direction={'row'} gap={'x4'}>
       {isChainInitilized && (
@@ -324,7 +328,7 @@ export const NavMenu = () => {
           </PopUp>
         </Flex>
       )}
-      {!address && !isMobile && (
+      {!address && !isMobile && showWalletActionButton && (
         <Box style={{ width: 110 }}>
           <ConnectButton />
         </Box>
@@ -367,7 +371,7 @@ export const NavMenu = () => {
           }}
         >
           <Flex direction={'column'} p={'x4'} gap={'x2'} style={{ width: 264 }}>
-            <ConnectButton />
+            {showWalletActionButton && <ConnectButton />}
             <Flex direction={'column'} gap={'x2'}>
               <Link href={'/about'}>
                 <Flex display="flex" align="center" justify={'center'} py={'x2'}>

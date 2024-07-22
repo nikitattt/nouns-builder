@@ -98,6 +98,10 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
     : false
   const warn = displayActions && (isBadActor || isPossibleDrain)
 
+  const showWalletActionButton = query?.walletActions
+    ? (query.walletActions as string) === 'true'
+    : false
+
   return (
     <Fragment>
       <Meta
@@ -128,7 +132,9 @@ const VotePage: NextPageWithLayout<VotePageProps> = ({
               </Flex>
             )}
 
-            {displayActions && <ProposalActions daoName={daoName} proposal={proposal} />}
+            {displayActions && showWalletActionButton && (
+              <ProposalActions daoName={daoName} proposal={proposal} />
+            )}
           </>
 
           <ProposalDetailsGrid proposal={proposal} />
