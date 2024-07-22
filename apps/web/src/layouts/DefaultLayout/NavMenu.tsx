@@ -115,6 +115,8 @@ export const NavMenu = () => {
   const showWalletActionButton = !!router.query?.walletActions
     ? (router.query.walletActions as string) === 'true'
     : false
+  const showDashboardLink = false
+  const showBridgeLink = false
 
   return (
     <Flex align={'center'} direction={'row'} gap={'x4'}>
@@ -380,13 +382,15 @@ export const NavMenu = () => {
                   </Text>
                 </Flex>
               </Link>
-              <Link href={'/dashboard'}>
-                <Flex display="flex" align="center" justify={'center'} py={'x2'}>
-                  <Text cursor={'pointer'} fontWeight={'display'}>
-                    Dashboard
-                  </Text>
-                </Flex>
-              </Link>
+              {showDashboardLink && (
+                <Link href={'/dashboard'}>
+                  <Flex display="flex" align="center" justify={'center'} py={'x2'}>
+                    <Text cursor={'pointer'} fontWeight={'display'}>
+                      Dashboard
+                    </Text>
+                  </Flex>
+                </Link>
+              )}
               <Link href={'/explore'}>
                 <Flex display="flex" align="center" justify={'center'} py={'x2'}>
                   <Text cursor={'pointer'} fontWeight={'display'}>
@@ -405,25 +409,27 @@ export const NavMenu = () => {
                   </Text>
                 </Flex>
               </a>
-              <NetworkController.Mainnet>
-                {canUserBridge ? (
-                  <Box as="span" onClick={openBridgeModal}>
-                    <Flex display="flex" align="center" justify={'center'} py={'x2'}>
-                      <Text cursor={'pointer'} fontWeight={'display'}>
-                        Bridge
-                      </Text>
-                    </Flex>
-                  </Box>
-                ) : (
-                  <Link href={'/bridge'}>
-                    <Flex display="flex" align="center" justify={'center'} py={'x2'}>
-                      <Text cursor={'pointer'} fontWeight={'display'}>
-                        Bridge
-                      </Text>
-                    </Flex>
-                  </Link>
-                )}
-              </NetworkController.Mainnet>
+              {showBridgeLink && (
+                <NetworkController.Mainnet>
+                  {canUserBridge ? (
+                    <Box as="span" onClick={openBridgeModal}>
+                      <Flex display="flex" align="center" justify={'center'} py={'x2'}>
+                        <Text cursor={'pointer'} fontWeight={'display'}>
+                          Bridge
+                        </Text>
+                      </Flex>
+                    </Box>
+                  ) : (
+                    <Link href={'/bridge'}>
+                      <Flex display="flex" align="center" justify={'center'} py={'x2'}>
+                        <Text cursor={'pointer'} fontWeight={'display'}>
+                          Bridge
+                        </Text>
+                      </Flex>
+                    </Link>
+                  )}
+                </NetworkController.Mainnet>
+              )}
               <Box
                 color="border"
                 borderStyle="solid"
